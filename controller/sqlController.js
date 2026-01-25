@@ -1,24 +1,33 @@
-const { Groq } = require('groq-sdk');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pool = require('../config/db');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Use gemini-2.0-flash (the newest free one)
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-2.0-flash",
+    systemInstruction: "You are a SQL expert for Postgres. Return ONLY the raw SQL code. No markdown, no backticks, no 'sql' prefix. Just the query string."
+});
 
 exports.generateAndRunSQL = async (req, res) => {
     const { question } = req.body;
+
     try {
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: "You are a SQL expert. Return ONLY the raw SQL string for Postgres. No markdown, no backticks." },
-                { role: "user", content: `Question: ${question}` }
-            ],
-            model: "llama-3.3-70b-versatile",
+        // Step 1: Generate SQL from Natural Language
+        const result = await model.generateContent(question);
+        const sql = result.response.text().trim();
+
+        // Step 2: Run that SQL on Neon Postgres
+        const dbResult = await pool.query(sql);
+
+        res.json({
+            status: "success",
+            query: sql,
+            data: dbResult.rows
         });
 
-        const sql = completion.choices[0].message.content.trim();
-        const result = await pool.query(sql);
-
-        res.json({ sql, data: result.rows });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong", details: err.message });
     }
 };
