@@ -4,9 +4,10 @@ const pool = require('../config/db');
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Use gemini-2.0-flash (the newest free one)
+// CHANGE THIS LINE:
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.0-flash",
-    systemInstruction: "You are a SQL expert for Postgres. Return ONLY the raw SQL code. No markdown, no backticks, no 'sql' prefix. Just the query string."
+    model: "gemini-2.0-flash", // This is the standard stable version for 2026
+    systemInstruction: "You are a SQL expert for Postgres. Return ONLY the raw SQL string. No markdown, no backticks."
 });
 
 exports.generateAndRunSQL = async (req, res) => {
