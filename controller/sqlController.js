@@ -1,34 +1,46 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { OpenAI } = require("openai");
 const pool = require('../config/db');
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// Use gemini-2.0-flash (the newest free one)
-// CHANGE THIS LINE:
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.0-flash", // This is the standard stable version for 2026
-    systemInstruction: "You are a SQL expert for Postgres. Return ONLY the raw SQL string. No markdown, no backticks."
+// Initialize OpenRouter
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": "http://localhost:3000", // Required by OpenRouter for rankings
+    "X-Title": "Text-to-SQL-Linux-Project",
+  }
 });
 
 exports.generateAndRunSQL = async (req, res) => {
     const { question } = req.body;
 
     try {
-        // Step 1: Generate SQL from Natural Language
-        const result = await model.generateContent(question);
-        const sql = result.response.text().trim();
+        // Step 1: Generate SQL using LiquidAI LFM 2.5 Thinking
+        const completion = await openai.chat.completions.create({
+            model: "liquid/lfm-2.5-1.2b-thinking:free",
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are a specialized SQL assistant. Database: Postgres. Table: users(id, name, email). Return ONLY the SQL string. No conversational text." 
+                },
+                { role: "user", content: question }
+            ],
+            temperature: 0.1 // Keep it precise for SQL
+        });
 
-        // Step 2: Run that SQL on Neon Postgres
+        const sql = completion.choices[0].message.content.trim();
+
+        // Step 2: Run the query on Neon
         const dbResult = await pool.query(sql);
 
         res.json({
             status: "success",
-            query: sql,
+            sql: sql,
             data: dbResult.rows
         });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Something went wrong", details: err.message });
+        console.error("Error:", err);
+        res.status(500).json({ error: "Failed to generate or run SQL", details: err.message });
     }
 };
