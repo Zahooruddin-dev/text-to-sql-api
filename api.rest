@@ -1,0 +1,56 @@
+@baseUrl = http://localhost:3000
+@apiKey = f7k2mX9pQw4nR8vT3hJcLzYbDs6eUa1N
+
+### Health Check
+GET {{baseUrl}}/health
+
+### Get all users
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "Get all users"
+}
+
+### Count users
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "How many users are there?"
+}
+
+### Products sorted by price
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "Show all products sorted by price descending"
+}
+
+### Orders with user and product name
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "Show all orders with the user name and product name"
+}
+
+### No API key - should return 401
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+
+{
+  "question": "Get all users"
+}
+
+### Missing question - should return 400
+POST {{baseUrl}}/api/v1/ask
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{}
