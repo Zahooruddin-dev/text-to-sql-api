@@ -1,7 +1,11 @@
-module.exports = (req, res, next) => {
-    const userKey = req.header('x-api-key');
-    if (userKey !== process.env.MY_APP_PASSWORD) {
-        return res.status(401).json({ error: "Unauthorized: Invalid API Key" });
-    }
-    next();
+const auth = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+
+  if (!apiKey || apiKey !== process.env.API_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
 };
+
+module.exports = auth;
