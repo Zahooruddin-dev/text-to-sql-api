@@ -1,5 +1,5 @@
 const { OpenAI } = require('openai');
-const pool = require('../config/db');
+const pool = require('../db/Pool');
 
 // Initialize OpenRouter
 const openai = new OpenAI({
