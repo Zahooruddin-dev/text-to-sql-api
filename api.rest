@@ -1,11 +1,11 @@
 @baseUrl = http://localhost:3000
-@apiKey = f7k2mX9pQw4nR8vT3hJcLzYbDs6eUa1N
+@apiKey = your_api_secret
 
 ### Health Check
 GET {{baseUrl}}/health
 
 ### Get all users
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 x-api-key: {{apiKey}}
 
@@ -13,8 +13,26 @@ x-api-key: {{apiKey}}
   "question": "Get all users"
 }
 
+### Preview SQL only (no execution)
+POST {{baseUrl}}/api/v2/ask/preview
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "Show all orders with user name and total amount"
+}
+
+### Execute SQL
+POST {{baseUrl}}/api/v2/ask/execute
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+  "question": "Show all products sorted by price descending"
+}
+
 ### Count users
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 x-api-key: {{apiKey}}
 
@@ -23,7 +41,7 @@ x-api-key: {{apiKey}}
 }
 
 ### Products sorted by price
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 x-api-key: {{apiKey}}
 
@@ -32,7 +50,7 @@ x-api-key: {{apiKey}}
 }
 
 ### Orders with user and product name
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 x-api-key: {{apiKey}}
 
@@ -41,7 +59,7 @@ x-api-key: {{apiKey}}
 }
 
 ### No API key - should return 401
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 
 {
@@ -49,8 +67,18 @@ Content-Type: application/json
 }
 
 ### Missing question - should return 400
-POST {{baseUrl}}/api/v1/ask
+POST {{baseUrl}}/api/v2/ask
 Content-Type: application/json
 x-api-key: {{apiKey}}
 
 {}
+
+### Refresh schema cache
+POST {{baseUrl}}/api/v2/schema/refresh
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{}
+
+### Metrics
+GET {{baseUrl}}/metrics

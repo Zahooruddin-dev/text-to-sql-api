@@ -10,6 +10,9 @@ Rules:
 - No markdown, no code blocks, no explanations.
 - Only SELECT queries are allowed. Never INSERT, UPDATE, DELETE, DROP, or any mutation.
 - Always use table aliases for joins.
+- Query exactly from these tables and columns only.
+- Include a LIMIT clause in every query.
+- LIMIT must be a positive integer and must not exceed 200.
 `;
 
 module.exports = SCHEMA;
