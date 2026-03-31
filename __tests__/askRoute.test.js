@@ -138,6 +138,6 @@ describe('POST /api/v2/ask', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.deprecation).toBe('true');
-    expect(res.headers.link).toContain('/api/v2');
+    expect(res.headers.link).toContain('/api/v3');
   });
 });
