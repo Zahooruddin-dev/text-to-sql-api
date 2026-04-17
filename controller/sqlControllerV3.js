@@ -97,7 +97,8 @@ function getPaginationParams(query) {
 exports.askV3 = async (req, res) => {
   const startedAt = Date.now();
   const { question, includeExplain = false, includeSuggestions = false } = req.body;
-  const { schema_version: schemaVersion = 'v3' } = req.query;
+  const schemaVersion = req.schemaVersion || req.query.schema_version || 'v3';
+  const apiVersion = req.baseUrl || '/api/v3';
   const { limit, offset } = getPaginationParams(req.query);
 
   // Validate input
@@ -119,7 +120,7 @@ exports.askV3 = async (req, res) => {
       details: { error: 'invalid_question' }
     });
 
-    return res.status(400).json(formatErrorResponse(error, schemaVersion));
+    return res.status(400).json(formatErrorResponse(error, schemaVersion, apiVersion));
   }
 
   try {
@@ -160,7 +161,7 @@ exports.askV3 = async (req, res) => {
         requestId: req.requestId,
         details: { sql: prepared.rawSql }
       };
-      return res.status(400).json(formatErrorResponse(error, schemaVersion));
+      return res.status(400).json(formatErrorResponse(error, schemaVersion, apiVersion));
     }
 
     let executableSql;
@@ -172,7 +173,7 @@ exports.askV3 = async (req, res) => {
         code: 'PAGINATION_FAILED',
         requestId: req.requestId
       };
-      return res.status(400).json(formatErrorResponse(error, schemaVersion));
+      return res.status(400).json(formatErrorResponse(error, schemaVersion, apiVersion));
     }
 
     // Execute query
@@ -229,7 +230,7 @@ exports.askV3 = async (req, res) => {
     if (includeExplain) {
       try {
         const explainResult = await queryOptimizationService.explainQuery(prepared.sql, false);
-        responseData.queryExplainUrl = `/api/v3/query/${req.requestId}/explain`;
+        responseData.queryExplainUrl = `${apiVersion}/query/${req.requestId}/explain`;
       } catch (err) {
         logEvent('warn', { event: 'explain_failed', error: err.message });
       }
@@ -242,13 +243,13 @@ exports.askV3 = async (req, res) => {
           prepared.sql,
           req.user.workspaceId
         );
-        responseData.optimizationHintsUrl = `/api/v3/query/${req.requestId}/hints`;
+        responseData.optimizationHintsUrl = `${apiVersion}/optimization/hints`;
       } catch (err) {
         logEvent('warn', { event: 'suggestions_failed', error: err.message });
       }
     }
 
-    return res.json(formatResponse(responseData, schemaVersion, '/api/v3'));
+    return res.json(formatResponse(responseData, schemaVersion, apiVersion));
   } catch (err) {
     const latencyMs = Date.now() - startedAt;
 
@@ -285,7 +286,7 @@ exports.askV3 = async (req, res) => {
       code: 'REQUEST_FAILED',
       requestId: req.requestId
     };
-    return res.status(500).json(formatErrorResponse(error, schemaVersion));
+    return res.status(500).json(formatErrorResponse(error, schemaVersion, apiVersion));
   }
 };
 
@@ -295,7 +296,8 @@ exports.askV3 = async (req, res) => {
 exports.previewV3 = async (req, res) => {
   const startedAt = Date.now();
   const { question } = req.body;
-  const { schema_version: schemaVersion = 'v3' } = req.query;
+  const schemaVersion = req.schemaVersion || req.query.schema_version || 'v3';
+  const apiVersion = req.baseUrl || '/api/v3';
 
   if (!question || typeof question !== 'string' || !question.trim()) {
     const error = {
@@ -313,7 +315,7 @@ exports.previewV3 = async (req, res) => {
       durationMs: Date.now() - startedAt
     });
 
-    return res.status(400).json(formatErrorResponse(error, schemaVersion));
+    return res.status(400).json(formatErrorResponse(error, schemaVersion, apiVersion));
   }
 
   try {
@@ -339,7 +341,7 @@ exports.previewV3 = async (req, res) => {
       autoRepairUsed: prepared.autoRepairUsed
     };
 
-    return res.json(formatResponse(responseData, schemaVersion, '/api/v3'));
+    return res.json(formatResponse(responseData, schemaVersion, apiVersion));
   } catch (err) {
     await auditService.log({
       workspaceId: req.user.workspaceId,
@@ -355,7 +357,7 @@ exports.previewV3 = async (req, res) => {
       code: 'PREVIEW_FAILED',
       requestId: req.requestId
     };
-    return res.status(500).json(formatErrorResponse(error, schemaVersion));
+    return res.status(500).json(formatErrorResponse(error, schemaVersion, apiVersion));
   }
 };
 

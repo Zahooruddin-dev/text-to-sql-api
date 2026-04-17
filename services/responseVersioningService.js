@@ -5,7 +5,8 @@
 const schemaVersions = {
   v1: 'v1',
   v2: 'v2',
-  v3: 'v3'
+  v3: 'v3',
+  v4: 'v4'
 };
 
 /**
@@ -76,6 +77,45 @@ function formatResponse(data, version = 'v3', apiVersion = '/api/v3') {
         }
       };
 
+    case 'v4':
+      return {
+        status: 'success',
+        apiVersion,
+        schemaVersion: version,
+        timestamp: new Date().toISOString(),
+        data: {
+          query: {
+            sql: data.sql,
+            generated: data.sqlGenerated,
+            validation: data.validationDetails
+          },
+          result: {
+            rows: data.results || [],
+            rowCount: data.rowCount,
+            executionTimeMs: data.executionTime
+          },
+          context: {
+            requestId: data.requestId,
+            workspaceId: data.workspaceId,
+            userId: data.userId,
+            userRole: data.userRole
+          }
+        },
+        pagination: {
+          limit: data.pagination?.limit || data.results?.length || 0,
+          offset: data.pagination?.offset || 0,
+          total: data.pagination?.total || data.rowCount || 0,
+          hasMore: (data.pagination?.offset || 0) + (data.pagination?.limit || 0) < (data.pagination?.total || data.rowCount || 0)
+        },
+        links: {
+          queryExplain: data.queryExplainUrl || null,
+          optimizationHints: data.optimizationHintsUrl || null
+        },
+        meta: {
+          autoRepairUsed: data.autoRepairUsed
+        }
+      };
+
     default:
       return formatResponse(data, 'v3', apiVersion);
   }
@@ -121,6 +161,22 @@ function formatErrorResponse(error, version = 'v3', apiVersion = '/api/v3') {
         help: error.helpUrl || 'https://api.docs/errors/' + (error.code || 'UNKNOWN')
       };
 
+    case 'v4':
+      return {
+        ...baseError,
+        error: {
+          code: error.code || 'UNKNOWN_ERROR',
+          message: error.message,
+          details: error.details || {}
+        },
+        context: {
+          requestId: error.requestId || null
+        },
+        help: {
+          url: error.helpUrl || 'https://api.docs/errors/' + (error.code || 'UNKNOWN')
+        }
+      };
+
     default:
       return formatErrorResponse(error, 'v3', apiVersion);
   }
@@ -129,29 +185,33 @@ function formatErrorResponse(error, version = 'v3', apiVersion = '/api/v3') {
 /**
  * Middleware to set response schema version from query param or header
  */
-function versionMiddleware(req, res, next) {
-  const version = req.query.schema_version || 
-                 req.headers['accept-version'] || 
-                 req.headers['x-api-schema-version'] || 
-                 'v3';
+function createVersionMiddleware(defaultVersion = 'v3') {
+  return (req, res, next) => {
+    const version = req.query.schema_version ||
+      req.headers['accept-version'] ||
+      req.headers['x-api-schema-version'] ||
+      defaultVersion;
 
-  // Validate version
-  if (!Object.values(schemaVersions).includes(version)) {
-    return res.status(400).json({
-      error: 'Invalid schema version',
-      code: 'INVALID_SCHEMA_VERSION',
-      supportedVersions: Object.values(schemaVersions)
-    });
-  }
+    if (!Object.values(schemaVersions).includes(version)) {
+      return res.status(400).json({
+        error: 'Invalid schema version',
+        code: 'INVALID_SCHEMA_VERSION',
+        supportedVersions: Object.values(schemaVersions)
+      });
+    }
 
-  req.schemaVersion = version;
-  res.setHeader('X-API-Schema-Version', version);
-  next();
+    req.schemaVersion = version;
+    res.setHeader('X-API-Schema-Version', version);
+    next();
+  };
 }
+
+const versionMiddleware = createVersionMiddleware('v3');
 
 module.exports = {
   formatResponse,
   formatErrorResponse,
+  createVersionMiddleware,
   versionMiddleware,
   schemaVersions
 };
