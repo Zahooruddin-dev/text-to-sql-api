@@ -8,6 +8,7 @@ const {
 describe('responseVersioningService v4', () => {
   test('includes v4 schema in supported versions', () => {
     expect(schemaVersions.v4).toBe('v4');
+    expect(schemaVersions.v5).toBe('v5');
   });
 
   test('formats v4 success responses', () => {
@@ -64,5 +65,42 @@ describe('responseVersioningService v4', () => {
     expect(req.schemaVersion).toBe('v4');
     expect(res.headers['X-API-Schema-Version']).toBe('v4');
     expect(next).toHaveBeenCalled();
+  });
+
+  test('formats v5 success responses', () => {
+    const payload = formatResponse({
+      sql: 'SELECT id FROM users LIMIT 10',
+      results: [{ id: 1 }],
+      rowCount: 1,
+      executionTime: 20,
+      sqlGenerated: true,
+      validationDetails: { ok: true },
+      requestId: 'req-3',
+      workspaceId: 5,
+      userId: 11,
+      userRole: 'viewer',
+      autoRepairUsed: true,
+      pagination: { limit: 10, offset: 0, total: 1 },
+      queryExplainUrl: '/api/v5/query/req-3/explain',
+      optimizationHintsUrl: '/api/v5/optimization/hints'
+    }, 'v5', '/api/v5');
+
+    expect(payload.schemaVersion).toBe('v5');
+    expect(payload.data.security.strictPolicyMode).toBe(true);
+    expect(payload.data.security.wildcardSelectionAllowed).toBe(false);
+    expect(payload.data.query.autoRepairUsed).toBe(true);
+  });
+
+  test('formats v5 error responses', () => {
+    const payload = formatErrorResponse({
+      message: 'strict mode failed',
+      code: 'SQL_VALIDATION_FAILED',
+      requestId: 'req-4',
+      classification: 'validation'
+    }, 'v5', '/api/v5');
+
+    expect(payload.schemaVersion).toBe('v5');
+    expect(payload.error.classification).toBe('validation');
+    expect(payload.context.requestId).toBe('req-4');
   });
 });
