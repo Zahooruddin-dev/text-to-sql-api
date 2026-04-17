@@ -31,19 +31,31 @@ function logEvent(level, payload) {
 /**
  * Prepare and validate SQL with optional policy application
  */
-async function prepareValidatedSql(question, workspaceId, userRole) {
+async function prepareValidatedSql(question, workspaceId, userRole, options = {}) {
+  const {
+    strictValidation = false,
+    strictPolicyMode = false
+  } = options;
+
+  const validationOptions = strictValidation
+    ? { disallowWildcard: true }
+    : {};
+  const policyOptions = strictPolicyMode
+    ? { requirePoliciesForAllTables: true }
+    : {};
+
   const schemaContext = await getSchemaContext();
   const allowedColumnsMap = await getAllowedColumnsMap();
 
   const firstAttempt = await generateSQL(question, schemaContext);
-  let validation = validateSelectSQL(firstAttempt, allowedColumnsMap);
+  let validation = validateSelectSQL(firstAttempt, allowedColumnsMap, validationOptions);
 
   if (validation.ok || !ENABLE_AUTO_REPAIR) {
     let finalSql = validation.sql;
 
     // Apply data policies based on role
     if (workspaceId && userRole !== 'admin') {
-      finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql);
+      finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql, policyOptions);
     }
 
     return {
@@ -61,11 +73,11 @@ async function prepareValidatedSql(question, workspaceId, userRole) {
     schemaContext
   });
 
-  validation = validateSelectSQL(repairedSql, allowedColumnsMap);
+  validation = validateSelectSQL(repairedSql, allowedColumnsMap, validationOptions);
 
   let finalSql = validation.sql;
   if (workspaceId && userRole !== 'admin') {
-    finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql);
+    finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql, policyOptions);
   }
 
   return {
@@ -99,6 +111,7 @@ exports.askV3 = async (req, res) => {
   const { question, includeExplain = false, includeSuggestions = false } = req.body;
   const schemaVersion = req.schemaVersion || req.query.schema_version || 'v3';
   const apiVersion = req.baseUrl || '/api/v3';
+  const isV5 = schemaVersion === 'v5' || apiVersion === '/api/v5';
   const { limit, offset } = getPaginationParams(req.query);
 
   // Validate input
@@ -128,7 +141,11 @@ exports.askV3 = async (req, res) => {
     const prepared = await prepareValidatedSql(
       question,
       req.user.workspaceId,
-      req.user.role
+      req.user.role,
+      {
+        strictValidation: isV5,
+        strictPolicyMode: isV5 && req.user.role !== 'admin'
+      }
     );
 
     if (!prepared.validation.ok) {
@@ -298,6 +315,7 @@ exports.previewV3 = async (req, res) => {
   const { question } = req.body;
   const schemaVersion = req.schemaVersion || req.query.schema_version || 'v3';
   const apiVersion = req.baseUrl || '/api/v3';
+  const isV5 = schemaVersion === 'v5' || apiVersion === '/api/v5';
 
   if (!question || typeof question !== 'string' || !question.trim()) {
     const error = {
@@ -319,7 +337,15 @@ exports.previewV3 = async (req, res) => {
   }
 
   try {
-    const prepared = await prepareValidatedSql(question, req.user.workspaceId, req.user.role);
+    const prepared = await prepareValidatedSql(
+      question,
+      req.user.workspaceId,
+      req.user.role,
+      {
+        strictValidation: isV5,
+        strictPolicyMode: isV5 && req.user.role !== 'admin'
+      }
+    );
 
     await auditService.log({
       workspaceId: req.user.workspaceId,
