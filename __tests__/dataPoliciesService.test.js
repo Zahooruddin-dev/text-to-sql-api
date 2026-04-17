@@ -67,4 +67,39 @@ describe('dataPoliciesService.applyPolicies', () => {
       dataPoliciesService.applyPolicies(2, 'viewer', 'SELECT id FROM orders LIMIT 10')
     ).rejects.toThrow();
   });
+
+  test('rejects strict mode when no policies exist', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      dataPoliciesService.applyPolicies(
+        3,
+        'viewer',
+        'SELECT id FROM users LIMIT 10',
+        { requirePoliciesForAllTables: true }
+      )
+    ).rejects.toThrow(/Strict policy mode requires explicit policies/);
+  });
+
+  test('rejects strict mode when any table is missing policy coverage', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 1,
+          table_name: 'orders',
+          allowed_columns: ['id'],
+          row_filter_sql: null
+        }
+      ]
+    });
+
+    await expect(
+      dataPoliciesService.applyPolicies(
+        4,
+        'viewer',
+        'SELECT u.id, o.id FROM users u JOIN orders o ON o.user_id = u.id LIMIT 10',
+        { requirePoliciesForAllTables: true }
+      )
+    ).rejects.toThrow(/Missing strict data policies for tables/);
+  });
 });
