@@ -138,6 +138,16 @@ describe('POST /api/v2/ask', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.deprecation).toBe('true');
-    expect(res.headers.link).toContain('/api/v4');
+    expect(res.headers.link).toContain('/api/v5');
+  });
+
+  test('advertises v5 as current health version while preserving older versions', async () => {
+    const res = await request(app).get('/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.apiVersion).toBe('v5');
+    expect(res.body.supportedVersions).toEqual(
+      expect.arrayContaining(['v1', 'v2', 'v3', 'v4', 'v5'])
+    );
   });
 });
