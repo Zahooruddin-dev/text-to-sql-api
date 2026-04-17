@@ -64,9 +64,17 @@ function buildAliasMap(ast, allowedColumns) {
   return { ok: true, aliasMap };
 }
 
-function validateColumnRef(node, aliasMap, allowedColumns) {
+function validateColumnRef(node, aliasMap, allowedColumns, options = {}) {
+  const { disallowWildcard = false } = options;
   const columnName = getColumnName(node.column);
-  if (!columnName || columnName === '*') {
+  if (!columnName) {
+    return { ok: true };
+  }
+
+  if (columnName === '*') {
+    if (disallowWildcard) {
+      return { ok: false, error: 'Wildcard selection is not allowed in strict mode' };
+    }
     return { ok: true };
   }
 
@@ -98,14 +106,14 @@ function validateColumnRef(node, aliasMap, allowedColumns) {
   return { ok: true };
 }
 
-function walkAndValidateColumns(node, aliasMap, allowedColumns) {
+function walkAndValidateColumns(node, aliasMap, allowedColumns, options = {}) {
   if (!node) {
     return { ok: true };
   }
 
   if (Array.isArray(node)) {
     for (const item of node) {
-      const result = walkAndValidateColumns(item, aliasMap, allowedColumns);
+      const result = walkAndValidateColumns(item, aliasMap, allowedColumns, options);
       if (!result.ok) {
         return result;
       }
@@ -118,11 +126,11 @@ function walkAndValidateColumns(node, aliasMap, allowedColumns) {
   }
 
   if (node.type === 'column_ref') {
-    return validateColumnRef(node, aliasMap, allowedColumns);
+    return validateColumnRef(node, aliasMap, allowedColumns, options);
   }
 
   for (const value of Object.values(node)) {
-    const result = walkAndValidateColumns(value, aliasMap, allowedColumns);
+    const result = walkAndValidateColumns(value, aliasMap, allowedColumns, options);
     if (!result.ok) {
       return result;
     }
@@ -192,7 +200,7 @@ function applyPagination(sql, limit, offset = 0) {
   return normalizeSql(paginatedSql);
 }
 
-function validateSelectSQL(sql, allowedColumns = DEFAULT_ALLOWED_COLUMNS) {
+function validateSelectSQL(sql, allowedColumns = DEFAULT_ALLOWED_COLUMNS, options = {}) {
   if (!sql || typeof sql !== 'string') {
     return { ok: false, error: 'Model did not return SQL text' };
   }
@@ -230,7 +238,7 @@ function validateSelectSQL(sql, allowedColumns = DEFAULT_ALLOWED_COLUMNS) {
     return aliasMapResult;
   }
 
-  const columnValidation = walkAndValidateColumns(ast, aliasMapResult.aliasMap, allowedColumns);
+  const columnValidation = walkAndValidateColumns(ast, aliasMapResult.aliasMap, allowedColumns, options);
   if (!columnValidation.ok) {
     return columnValidation;
   }
