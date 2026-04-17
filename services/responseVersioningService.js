@@ -6,7 +6,8 @@ const schemaVersions = {
   v1: 'v1',
   v2: 'v2',
   v3: 'v3',
-  v4: 'v4'
+  v4: 'v4',
+  v5: 'v5'
 };
 
 /**
@@ -116,6 +117,47 @@ function formatResponse(data, version = 'v3', apiVersion = '/api/v3') {
         }
       };
 
+    case 'v5':
+      return {
+        status: 'success',
+        apiVersion,
+        schemaVersion: version,
+        timestamp: new Date().toISOString(),
+        data: {
+          query: {
+            sql: data.sql,
+            generated: data.sqlGenerated,
+            validation: data.validationDetails,
+            autoRepairUsed: data.autoRepairUsed
+          },
+          result: {
+            rows: data.results || [],
+            rowCount: data.rowCount,
+            executionTimeMs: data.executionTime
+          },
+          context: {
+            requestId: data.requestId,
+            workspaceId: data.workspaceId,
+            userId: data.userId,
+            userRole: data.userRole
+          },
+          security: {
+            strictPolicyMode: true,
+            wildcardSelectionAllowed: false
+          }
+        },
+        pagination: {
+          limit: data.pagination?.limit || data.results?.length || 0,
+          offset: data.pagination?.offset || 0,
+          total: data.pagination?.total || data.rowCount || 0,
+          hasMore: (data.pagination?.offset || 0) + (data.pagination?.limit || 0) < (data.pagination?.total || data.rowCount || 0)
+        },
+        links: {
+          queryExplain: data.queryExplainUrl || null,
+          optimizationHints: data.optimizationHintsUrl || null
+        }
+      };
+
     default:
       return formatResponse(data, 'v3', apiVersion);
   }
@@ -168,6 +210,23 @@ function formatErrorResponse(error, version = 'v3', apiVersion = '/api/v3') {
           code: error.code || 'UNKNOWN_ERROR',
           message: error.message,
           details: error.details || {}
+        },
+        context: {
+          requestId: error.requestId || null
+        },
+        help: {
+          url: error.helpUrl || 'https://api.docs/errors/' + (error.code || 'UNKNOWN')
+        }
+      };
+
+    case 'v5':
+      return {
+        ...baseError,
+        error: {
+          code: error.code || 'UNKNOWN_ERROR',
+          message: error.message,
+          details: error.details || {},
+          classification: error.classification || 'runtime'
         },
         context: {
           requestId: error.requestId || null
