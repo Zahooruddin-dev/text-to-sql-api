@@ -1,4 +1,4 @@
-const { validateSelectSQL } = require('../utils/sqlGuard');
+const { validateSelectSQL, applyPagination } = require('../utils/sqlGuard');
 
 describe('validateSelectSQL', () => {
   test('accepts single SELECT with allowed table, columns and limit', () => {
@@ -34,5 +34,21 @@ describe('validateSelectSQL', () => {
     const result = validateSelectSQL('SELECT password_hash FROM users LIMIT 10');
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/Column is not allowed/);
+  });
+});
+
+describe('applyPagination', () => {
+  test('rewrites existing limit with requested limit and offset', () => {
+    const sql = applyPagination('SELECT id, name FROM users LIMIT 10', 25, 5);
+    expect(sql).toMatch(/LIMIT 25 OFFSET 5$/);
+  });
+
+  test('enforces max limit cap', () => {
+    const sql = applyPagination('SELECT id FROM users LIMIT 10', 9999, 0);
+    expect(sql).toMatch(/LIMIT 200$/);
+  });
+
+  test('throws for non-select statements', () => {
+    expect(() => applyPagination('DELETE FROM users WHERE id = 1', 10, 0)).toThrow(/SELECT/);
   });
 });

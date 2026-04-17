@@ -154,6 +154,44 @@ function normalizeSql(sql) {
   return trimmed.endsWith(';') ? trimmed.slice(0, -1) : trimmed;
 }
 
+function buildNumericNode(value) {
+  return {
+    type: 'number',
+    value: Number(value)
+  };
+}
+
+function applyPagination(sql, limit, offset = 0) {
+  const normalizedSql = normalizeSql(sql || '');
+  if (!normalizedSql) {
+    throw new Error('Cannot paginate empty SQL');
+  }
+
+  let ast;
+  try {
+    ast = parser.astify(normalizedSql, { database: 'Postgresql' });
+  } catch (err) {
+    throw new Error(`Failed to parse SQL for pagination: ${err.message}`);
+  }
+
+  if (Array.isArray(ast) || ast.type !== 'select') {
+    throw new Error('Pagination can only be applied to a single SELECT statement');
+  }
+
+  const safeLimit = Math.min(Math.max(1, Number(limit) || 1), MAX_QUERY_LIMIT);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+
+  ast.limit = {
+    seperator: safeOffset > 0 ? 'offset' : '',
+    value: safeOffset > 0
+      ? [buildNumericNode(safeLimit), buildNumericNode(safeOffset)]
+      : [buildNumericNode(safeLimit)]
+  };
+
+  const paginatedSql = parser.sqlify(ast, { database: 'Postgresql' });
+  return normalizeSql(paginatedSql);
+}
+
 function validateSelectSQL(sql, allowedColumns = DEFAULT_ALLOWED_COLUMNS) {
   if (!sql || typeof sql !== 'string') {
     return { ok: false, error: 'Model did not return SQL text' };
@@ -206,5 +244,6 @@ function validateSelectSQL(sql, allowedColumns = DEFAULT_ALLOWED_COLUMNS) {
 }
 
 module.exports = {
-  validateSelectSQL
+  validateSelectSQL,
+  applyPagination
 };

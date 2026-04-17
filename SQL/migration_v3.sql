@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   user_agent TEXT,
   status_code INT,
   duration_ms INT,
-  created_at TIMESTAMP DEFAULT NOW
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Create indexes for audit logs
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS query_metrics (
   sql_preview TEXT,
   endpoint VARCHAR(100),
   response_version VARCHAR(20),
-  created_at TIMESTAMP DEFAULT NOW
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Create indexes for metrics

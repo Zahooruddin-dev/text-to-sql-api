@@ -1,6 +1,6 @@
 const { generateSQL, repairSQL } = require('../config/bedrockService');
 const pool = require('../config/db');
-const { validateSelectSQL } = require('../utils/sqlGuard');
+const { validateSelectSQL, applyPagination } = require('../utils/sqlGuard');
 const { getAllowedColumnsMap, getSchemaContext, refreshSchemaCache } = require('../services/schemaService');
 const { recordRequest } = require('../services/metricsService');
 const auditService = require('../services/auditService');
@@ -163,9 +163,21 @@ exports.askV3 = async (req, res) => {
       return res.status(400).json(formatErrorResponse(error, schemaVersion));
     }
 
+    let executableSql;
+    try {
+      executableSql = applyPagination(prepared.sql, limit, offset);
+    } catch (paginationError) {
+      const error = {
+        message: paginationError.message,
+        code: 'PAGINATION_FAILED',
+        requestId: req.requestId
+      };
+      return res.status(400).json(formatErrorResponse(error, schemaVersion));
+    }
+
     // Execute query
     const result = await pool.query({
-      text: prepared.sql + ` LIMIT ${limit} OFFSET ${offset}`,
+      text: executableSql,
       query_timeout: QUERY_TIMEOUT_MS
     });
 
@@ -181,7 +193,7 @@ exports.askV3 = async (req, res) => {
       latencyMs,
       autoRepairUsed: prepared.autoRepairUsed,
       rowCount: result.rows.length,
-      sqlPreview: prepared.sql.substring(0, 500),
+      sqlPreview: executableSql.substring(0, 500),
       endpoint: '/ask',
       responseVersion: schemaVersion
     });
@@ -199,7 +211,7 @@ exports.askV3 = async (req, res) => {
 
     // Prepare response
     let responseData = {
-      sql: prepared.sql,
+      sql: executableSql,
       results: result.rows,
       rowCount: result.rows.length,
       executionTime: latencyMs,
