@@ -318,8 +318,9 @@ const dataPoliciesService = {
 
       return normalizeSql(parser.sqlify(ast, { database: 'Postgresql' }));
     } catch (error) {
-      console.error('Error applying policies:', error);
-      throw error;
+      const message = error && error.message ? error.message : String(error);
+      console.error('Error applying policies:', message);
+      throw new Error(message);
     }
   },
 
