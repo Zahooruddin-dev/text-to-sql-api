@@ -35,6 +35,21 @@ describe('validateSelectSQL', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/Column is not allowed/);
   });
+
+  test('allows wildcard in default mode', () => {
+    const result = validateSelectSQL('SELECT * FROM users LIMIT 10');
+    expect(result.ok).toBe(true);
+  });
+
+  test('rejects wildcard in strict mode', () => {
+    const result = validateSelectSQL(
+      'SELECT * FROM users LIMIT 10',
+      undefined,
+      { disallowWildcard: true }
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Wildcard selection is not allowed/);
+  });
 });
 
 describe('applyPagination', () => {
