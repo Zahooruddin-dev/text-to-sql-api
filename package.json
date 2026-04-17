@@ -1,7 +1,7 @@
 {
   "name": "text-to-sql-api",
-  "version": "3.0.0",
-  "description": "Production-ready Node.js API V3 with JWT/OAuth, role-based policies, audit logs, and query optimization",
+  "version": "5.0.0",
+  "description": "Production-ready Node.js API V5 with JWT/OAuth, strict policy modes, multi-version support, and query optimization",
   "homepage": "https://github.com/Zahooruddin-dev/text-to-sql-api#readme",
   "bugs": {
     "url": "https://github.com/Zahooruddin-dev/text-to-sql-api/issues"
