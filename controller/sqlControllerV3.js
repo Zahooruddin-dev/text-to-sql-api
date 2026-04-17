@@ -43,7 +43,7 @@ async function prepareValidatedSql(question, workspaceId, userRole) {
 
     // Apply data policies based on role
     if (workspaceId && userRole !== 'admin') {
-      finalSql = await dataPoliciesService.applifyPolicies(workspaceId, userRole, finalSql);
+      finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql);
     }
 
     return {
@@ -65,7 +65,7 @@ async function prepareValidatedSql(question, workspaceId, userRole) {
 
   let finalSql = validation.sql;
   if (workspaceId && userRole !== 'admin') {
-    finalSql = await dataPoliciesService.applifyPolicies(workspaceId, userRole, finalSql);
+    finalSql = await dataPoliciesService.applyPolicies(workspaceId, userRole, finalSql);
   }
 
   return {

@@ -1,5 +1,30 @@
 const pool = require('../config/db');
 
+const write = typeof pool.writeQuery === 'function'
+  ? pool.writeQuery.bind(pool)
+  : pool.query.bind(pool);
+
+function normalizeExplainPlan(row) {
+  if (!row) {
+    return null;
+  }
+
+  const candidate = row['QUERY PLAN'] || row.query_plan || row.plan || row;
+  if (Array.isArray(candidate)) {
+    return candidate[0] || null;
+  }
+
+  return candidate;
+}
+
+function getRootPlanNode(plan) {
+  if (!plan || typeof plan !== 'object') {
+    return null;
+  }
+
+  return plan.Plan || plan.plan || plan;
+}
+
 /**
  * Query Optimization Service
  * Provides query explain analysis and optimization hints
@@ -15,8 +40,10 @@ const queryOptimizationService = {
         : `EXPLAIN (FORMAT JSON) ${sql}`;
 
       const result = await pool.query(explainSql);
+      const normalizedPlan = normalizeExplainPlan(result.rows[0]);
+
       return {
-        plan: result.rows[0],
+        plan: normalizedPlan,
         analyzed: analyze
       };
     } catch (error) {
@@ -43,10 +70,11 @@ const queryOptimizationService = {
       }
 
       const suggestions = [];
-      const plan = explainResult.plan[0];
+      const plan = explainResult.plan;
+      const root = getRootPlanNode(plan) || {};
 
       // Check for sequential scans - suggest indexes
-      const planJson = JSON.stringify(plan);
+      const planJson = JSON.stringify(root);
       if (planJson.includes('Seq Scan') && planJson.includes('Filter')) {
         suggestions.push({
           type: 'index',
@@ -57,7 +85,7 @@ const queryOptimizationService = {
       }
 
       // Check for nested loops with high iteration count
-      if (planJson.includes('Nested Loop') && plan['Plan-Height'] > 3) {
+      if (planJson.includes('Nested Loop')) {
         suggestions.push({
           type: 'join',
           severity: 'medium',
@@ -87,9 +115,9 @@ const queryOptimizationService = {
       return {
         plan,
         suggestions,
-        estimatedRows: plan['Plan-Rows'],
-        actualRows: plan['Actual-Rows'],
-        executionTime: plan['Execution Time']
+        estimatedRows: root['Plan Rows'] || root['Plan-Rows'] || null,
+        actualRows: root['Actual Rows'] || root['Actual-Rows'] || null,
+        executionTime: plan ? (plan['Execution Time'] || root['Execution Time'] || null) : null
       };
     } catch (error) {
       console.error('Error analyzing query:', error);
@@ -102,7 +130,7 @@ const queryOptimizationService = {
    */
   recordOptimizationHint: async (workspaceId, queryPattern, suggestedIndex, improvementPercent) => {
     try {
-      await pool.query(
+      await write(
         `INSERT INTO query_optimization_hints 
          (workspace_id, query_pattern, suggested_index, estimated_improvement_percent)
          VALUES ($1, $2, $3, $4)`,
@@ -140,7 +168,7 @@ const queryOptimizationService = {
    */
   markHintImplemented: async (hintId, workspaceId) => {
     try {
-      await pool.query(
+      await write(
         `UPDATE query_optimization_hints SET implemented = true 
          WHERE id = $1 AND workspace_id = $2`,
         [hintId, workspaceId]

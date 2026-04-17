@@ -1,5 +1,9 @@
 const pool = require('../config/db');
 
+const write = typeof pool.writeQuery === 'function'
+  ? pool.writeQuery.bind(pool)
+  : pool.query.bind(pool);
+
 /**
  * Audit Logging Service
  * Persists all API requests and actions to audit_logs table
@@ -24,7 +28,7 @@ const auditService = {
         durationMs
       } = auditData;
 
-      await pool.query(
+      await write(
         `INSERT INTO audit_logs 
          (workspace_id, user_id, request_id, action, resource_type, resource_id, 
           details, ip_address, user_agent, status_code, duration_ms)

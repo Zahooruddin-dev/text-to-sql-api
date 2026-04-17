@@ -1,5 +1,9 @@
 const pool = require('../config/db');
 
+const write = typeof pool.writeQuery === 'function'
+  ? pool.writeQuery.bind(pool)
+  : pool.query.bind(pool);
+
 const metrics = {
   startedAt: new Date().toISOString(),
   requestsTotal: 0,
@@ -55,7 +59,7 @@ async function recordRequest(options = {}) {
   // Persist to database if workspaceId is provided (V3 feature)
   if (workspaceId) {
     try {
-      await pool.query(
+      await write(
         `INSERT INTO query_metrics 
          (workspace_id, user_id, request_id, query_time_ms, row_count, success, 
           error_message, sql_preview, endpoint, response_version)
@@ -99,7 +103,8 @@ function getMetricsSnapshot() {
  */
 async function getPersistedMetrics(workspaceId, options = {}) {
   try {
-    const { limit = 1000, days = 7 } = options;
+    const safeLimit = Math.min(Math.max(Number(options.limit) || 1000, 1), 5000);
+    const safeDays = Math.min(Math.max(Number(options.days) || 7, 1), 365);
 
     const result = await pool.query(
       `SELECT 
@@ -113,11 +118,11 @@ async function getPersistedMetrics(workspaceId, options = {}) {
          AVG(row_count) as avg_rows_returned
        FROM query_metrics
        WHERE workspace_id = $1 
-         AND created_at >= NOW() - INTERVAL '${days} days'
+         AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
        GROUP BY endpoint, response_version
        ORDER BY total_requests DESC
-       LIMIT ${limit}`,
-      [workspaceId]
+       LIMIT $3`,
+      [workspaceId, safeDays, safeLimit]
     );
 
     return result.rows;
@@ -132,7 +137,8 @@ async function getPersistedMetrics(workspaceId, options = {}) {
  */
 async function getMetricsTimeSeries(workspaceId, options = {}) {
   try {
-    const { days = 7, interval = 'hour' } = options;
+    const safeDays = Math.min(Math.max(Number(options.days) || 7, 1), 365);
+    const interval = options.interval || 'hour';
 
     const intervalMap = {
       day: 'day',
@@ -150,10 +156,10 @@ async function getMetricsTimeSeries(workspaceId, options = {}) {
          AVG(query_time_ms) as avg_duration_ms
        FROM query_metrics
        WHERE workspace_id = $1 
-         AND created_at >= NOW() - INTERVAL '${days} days'
+         AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
        GROUP BY DATE_TRUNC('${timeInterval}', created_at)
        ORDER BY bucket DESC`,
-      [workspaceId]
+      [workspaceId, safeDays]
     );
 
     return result.rows;
