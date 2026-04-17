@@ -103,6 +103,39 @@ function getPaginationParams(query) {
   return { limit, offset };
 }
 
+async function executeQueryWithContext({ sql, timeoutMs, workspaceId, strictTenantMode }) {
+  if (!strictTenantMode || !workspaceId || !pool.readPool || typeof pool.readPool.connect !== 'function') {
+    return pool.query({
+      text: sql,
+      query_timeout: timeoutMs
+    });
+  }
+
+  const client = await pool.readPool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL app.current_workspace_id = $1', [String(workspaceId)]);
+    const result = await client.query({
+      text: sql,
+      query_timeout: timeoutMs
+    });
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      logEvent('error', {
+        event: 'rollback_failed',
+        error: rollbackError.message
+      });
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * V3: Ask endpoint with all new features
  */
@@ -194,9 +227,11 @@ exports.askV3 = async (req, res) => {
     }
 
     // Execute query
-    const result = await pool.query({
-      text: executableSql,
-      query_timeout: QUERY_TIMEOUT_MS
+    const result = await executeQueryWithContext({
+      sql: executableSql,
+      timeoutMs: QUERY_TIMEOUT_MS,
+      workspaceId: req.user.workspaceId,
+      strictTenantMode: isV5 && req.user.role !== 'admin'
     });
 
     const latencyMs = Date.now() - startedAt;
