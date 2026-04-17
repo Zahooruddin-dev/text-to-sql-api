@@ -1,4 +1,4 @@
-jest.mock('../config/bedrockService', () => ({
+jest.mock('../services/llmAdapter', () => ({
   generateSQL: jest.fn(),
   repairSQL: jest.fn()
 }));
@@ -8,7 +8,7 @@ jest.mock('../config/db', () => ({
 }));
 
 const request = require('supertest');
-const { generateSQL, repairSQL } = require('../config/bedrockService');
+const { generateSQL, repairSQL } = require('../services/llmAdapter');
 const pool = require('../config/db');
 
 describe('POST /api/v2/ask', () => {

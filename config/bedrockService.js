@@ -7,6 +7,11 @@ const TEMPERATURE = Number(process.env.BEDROCK_TEMPERATURE || 0.1);
 const TIMEOUT_MS = Number(process.env.BEDROCK_TIMEOUT_MS || 15000);
 const MAX_RETRIES = Math.max(0, Number(process.env.BEDROCK_MAX_RETRIES || 1));
 const RETRY_BASE_MS = Math.max(50, Number(process.env.BEDROCK_RETRY_BASE_MS || 200));
+const BEDROCK_RATE_LIMIT_WINDOW_MS = Math.max(100, Number(process.env.BEDROCK_RATE_LIMIT_WINDOW_MS || 1000));
+const BEDROCK_RATE_LIMIT_MAX = Math.max(1, Number(process.env.BEDROCK_RATE_LIMIT_MAX || 5));
+
+let limiterChain = Promise.resolve();
+let requestTimestamps = [];
 
 function extractText(response) {
   return response && response.output && response.output.message && response.output.message.content
@@ -16,6 +21,41 @@ function extractText(response) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function pruneTimestamps(now) {
+  requestTimestamps = requestTimestamps.filter((timestamp) => now - timestamp < BEDROCK_RATE_LIMIT_WINDOW_MS);
+}
+
+async function waitForRateLimitSlot() {
+  while (true) {
+    const now = Date.now();
+    pruneTimestamps(now);
+
+    if (requestTimestamps.length < BEDROCK_RATE_LIMIT_MAX) {
+      requestTimestamps.push(now);
+      return;
+    }
+
+    const oldest = requestTimestamps[0];
+    const waitMs = Math.max(1, BEDROCK_RATE_LIMIT_WINDOW_MS - (now - oldest));
+    await sleep(waitMs);
+  }
+}
+
+function runWithRateLimit(task) {
+  const run = async () => {
+    await waitForRateLimitSlot();
+    return task();
+  };
+
+  const operation = limiterChain.then(run, run);
+  limiterChain = operation.then(
+    () => undefined,
+    () => undefined
+  );
+
+  return operation;
 }
 
 function timeoutError() {
@@ -37,7 +77,7 @@ async function sendWithRetry(command) {
   let lastError;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
-      return await withTimeout(bedrockClient.send(command));
+      return await runWithRateLimit(() => withTimeout(bedrockClient.send(command)));
     } catch (err) {
       lastError = err;
       if (attempt >= MAX_RETRIES) {
@@ -54,7 +94,7 @@ async function sendWithRetry(command) {
   throw lastError;
 }
 
-const generateSQL = async (question, schemaContext) => {
+const generateSQLWithBedrock = async (question, schemaContext) => {
   const command = new ConverseCommand({
     modelId: process.env.AWS_BEDROCK_MODEL_ID,
     system: [{ text: schemaContext || SCHEMA }],
@@ -79,7 +119,7 @@ const generateSQL = async (question, schemaContext) => {
   return sql;
 };
 
-const repairSQL = async ({ question, invalidSql, validationError, schemaContext }) => {
+const repairSQLWithBedrock = async ({ question, invalidSql, validationError, schemaContext }) => {
   const repairPrompt = [
     `Original user question: ${question}`,
     `Invalid SQL: ${invalidSql}`,
@@ -104,4 +144,12 @@ const repairSQL = async ({ question, invalidSql, validationError, schemaContext 
   return extractText(response);
 };
 
-module.exports = { generateSQL, repairSQL };
+const generateSQL = generateSQLWithBedrock;
+const repairSQL = repairSQLWithBedrock;
+
+module.exports = {
+  generateSQL,
+  repairSQL,
+  generateSQLWithBedrock,
+  repairSQLWithBedrock
+};

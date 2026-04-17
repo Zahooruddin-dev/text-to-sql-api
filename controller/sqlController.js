@@ -1,4 +1,4 @@
-const { generateSQL, repairSQL } = require('../config/bedrockService');
+const { generateSQL, repairSQL } = require('../services/llmAdapter');
 const pool = require('../config/db');
 const { validateSelectSQL } = require('../utils/sqlGuard');
 const { getAllowedColumnsMap, getSchemaContext, refreshSchemaCache } = require('../services/schemaService');
