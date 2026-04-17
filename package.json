@@ -10,7 +10,7 @@
     "type": "git",
     "url": "git+https://github.com/Zahooruddin-dev/text-to-sql-api.git"
   },
-  "license": "ISC",
+  "license": "MIT",
   "author": "",
   "type": "commonjs",
   "main": "server.js",
