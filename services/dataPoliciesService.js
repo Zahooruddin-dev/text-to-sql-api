@@ -292,12 +292,16 @@ const dataPoliciesService = {
     }
   },
 
-  applyPolicies: async (workspaceId, role, sql) => {
+  applyPolicies: async (workspaceId, role, sql, options = {}) => {
     try {
+      const { requirePoliciesForAllTables = false } = options;
       const policies = await dataPoliciesService.getPoliciesForRole(workspaceId, role);
       const normalizedSql = normalizeSql(sql);
 
       if (!policies || policies.length === 0) {
+        if (requirePoliciesForAllTables) {
+          throw new Error('Strict policy mode requires explicit policies for all referenced tables');
+        }
         return normalizedSql;
       }
 
@@ -310,6 +314,16 @@ const dataPoliciesService = {
       const policiesByTable = new Map(
         policies.map((policy) => [cleanIdentifier(policy.table_name), policy])
       );
+
+      if (requirePoliciesForAllTables) {
+        const missingPolicies = tableRefs
+          .filter((tableRef) => !policiesByTable.has(tableRef.table))
+          .map((tableRef) => tableRef.table);
+
+        if (missingPolicies.length > 0) {
+          throw new Error(`Missing strict data policies for tables: ${missingPolicies.join(', ')}`);
+        }
+      }
 
       applyColumnPolicies(ast, tableRefs, policiesByTable);
 
@@ -324,8 +338,8 @@ const dataPoliciesService = {
     }
   },
 
-  applifyPolicies: async (workspaceId, role, sql) => {
-    return dataPoliciesService.applyPolicies(workspaceId, role, sql);
+  applifyPolicies: async (workspaceId, role, sql, options = {}) => {
+    return dataPoliciesService.applyPolicies(workspaceId, role, sql, options);
   },
 
   /**
