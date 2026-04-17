@@ -1,8 +1,8 @@
-# Text to SQL API V3
+# Text to SQL API V4
 
-Production-ready Node.js API that translates natural language to safe SQL using AWS Bedrock with **JWT/OAuth authentication**, **role-based access control**, **persistent audit logs**, **query optimization** features, and **multi-tenant support**.
+Production-ready Node.js API that translates natural language to safe SQL using AWS Bedrock with **JWT/OAuth authentication**, **role-based access control**, **persistent audit logs**, **query optimization** features, **provider-adapter LLM integration**, and **multi-tenant support**.
 
-## What's New in V3
+## What's New in V4
 
 ✨ **Authentication & Authorization** - JWT/OAuth replaces shared API keys with industry-standard tokens and role-based access control (admin, editor, viewer roles)
 
@@ -15,6 +15,14 @@ Production-ready Node.js API that translates natural language to safe SQL using 
 📑 **Pagination & Versioning** - Result pagination (limit/offset), response schema versioning for backward compatibility
 
 🏢 **Multi-tenant** - Complete workspace isolation with per-tenant data policies and row/column-level access control
+
+🧠 **LLM Provider Adapter** - Controllers now call a provider adapter layer, enabling provider expansion while keeping request flow stable
+
+🛡️ **Bedrock Outbound Rate Limiting** - Internal Bedrock request limiter controls burst traffic to model endpoints with retry/timeout protection
+
+🗃️ **Read/Write DB Separation** - Read paths and write paths are separated to support least-privilege database credentials in production
+
+🔐 **AST-based Policy Enforcement** - Data policies are now applied via SQL AST rewriting rather than string replacement
 
 ## Why this project exists
 
@@ -57,18 +65,19 @@ Primary goals:
 
 | Version | Base Path | Auth | Status | Next |
 |---------|-----------|------|--------|------|
-| **V3** | `/api/v3` | JWT/OAuth | ✅ Current | / |
-| **V2** | `/api/v2` | API Key | ⚠️ Supported | V3 |
+| **V4** | `/api/v4` | JWT/OAuth | ✅ Current | / |
+| **V3** | `/api/v3` | JWT/OAuth | ⚠️ Supported | V4 |
+| **V2** | `/api/v2` | API Key | ⚠️ Supported | V4 |
 | **V1** | `/api/v1` | API Key | 🚫 Deprecated | Sunset 2026-12-31 |
 
 ## Architecture
 
-### Request Flow (V3)
+### Request Flow (V4)
 
 1. Client sends JWT token with question
 2. JWT verification and workspace/role resolution
 3. Schema metadata lookup (cached)
-4. Bedrock generates SQL with schema context
+4. LLM adapter routes request to Bedrock with timeout/retry/rate limiting
 5. SQL validation against AST rules
 6. Data policy application based on user role
 7. Query execution with timeout protection
@@ -76,7 +85,7 @@ Primary goals:
 9. Audit log recording
 10. Metrics persistence
 
-### Database Changes for V3
+### Database Changes for V4
 
 New tables added:
 - `workspaces` - Tenant management
@@ -93,8 +102,8 @@ New tables added:
 
 ```
 text-to-sql-api/
-├── server.js                          # Express app V1/V2/V3 routing
-├── package.json                       # v3.0.0 with JWT dependencies  
+├── server.js                          # Express app V1/V2/V3/V4 routing
+├── package.json                       # v4-compatible API runtime
 ├── SQL/
 │   ├── table.sql                      # Base schema (users, products, orders)
 │   └── migration_v3.sql               # V3 schema with audit/metrics/RBAC tables
@@ -103,69 +112,74 @@ text-to-sql-api/
 │   ├── db.js, env.js
 ├── controller/
 │   ├── sqlController.js               # V2 (legacy)
-│   └── sqlControllerV3.js            # V3 with new features
+│   └── sqlControllerV3.js            # Shared V3/V4 controller logic
 ├── middleware/
 │   ├── auth.js (V2)                   # API key auth (legacy)
 │   ├── authV3.js                      # JWT/OAuth validation (NEW)
 │   ├── rateLimit.js, requestContext.js
 ├── routes/
 │   ├── sqlRoutes.js                   # V2 routes (legacy)
-│   └── sqlRoutesV3.js                 # V3 routes (NEW)
+│   ├── sqlRoutesV3.js                 # V3 routes
+│   └── sqlRoutesV4.js                 # V4 routes
 ├── services/
-│   ├── metricsService.js              # Now persists to DB
+│   ├── metricsService.js              # Persists to DB
 │   ├── schemaService.js
 │   ├── auditService.js                # NEW: Audit logging
 │   ├── rbacService.js                 # NEW: Role-based access
-│   ├── dataPoliciesService.js         # NEW: Row/column policies
+│   ├── dataPoliciesService.js         # AST-based row/column policies
+│   ├── llmAdapter.js                  # NEW: Provider adapter layer
 │   ├── queryOptimizationService.js    # NEW: Query explain & hints
 │   └── responseVersioningService.js   # NEW: Schema versioning
 ├── utils/ (sqlGuard.js, etc.)
 └── __tests__/
 ```
 
-## API Reference - V3
+## API Reference - V4
 
 Base URL: `http://localhost:3000`
 
 ### Authentication
 
-All V3 endpoints require JWT in Authorization header:
+All V4 endpoints require JWT in Authorization header:
 ```
 Authorization: Bearer <your_jwt_token>
 ```
 
 ### Query Endpoints
 
-**`POST /api/v3/ask`** - Generate and execute SQL with pagination
+**`POST /api/v4/ask`** - Generate and execute SQL with pagination
 
 Query params: `limit` (default 50, max 1000), `offset` (default 0), `schema_version`, `includeExplain`, `includeSuggestions`
 
-**`POST /api/v3/ask/preview`** - Generate and validate SQL without executing
+**`POST /api/v4/ask/preview`** - Generate and validate SQL without executing
 
-**`GET /api/v3/query/:queryId/explain`** - Get execution plan for query
+**`GET /api/v4/query/:queryId/explain`** - Get execution plan for query
 
 Query param: `analyze` (true for EXPLAIN ANALYZE)
 
-**`GET /api/v3/optimization/hints`** - Get recorded optimization suggestions
+**`GET /api/v4/optimization/hints`** - Get recorded optimization suggestions
 
 ### Audit & Compliance Endpoints
 
-**`GET /api/v3/audit/logs`** (requires admin/editor) - Get audit trail
+**`GET /api/v4/audit/logs`** (requires admin/editor) - Get audit trail
 
 Query params: `userId`, `action`, `days` (default 7), `limit`, `offset`
 
-**`GET /api/v3/audit/stats`** (requires admin) - Get action statistics
+**`GET /api/v4/audit/stats`** (requires admin) - Get action statistics
 
-**`POST /api/v3/schema/refresh`** (requires admin) - Force schema cache refresh
+**`POST /api/v4/schema/refresh`** (requires admin) - Force schema cache refresh
 
-**`GET /api/v3/permissions`** - Check current user permissions
+**`GET /api/v4/permissions`** - Check current user permissions
 
-### Response Format (V3)
+### Response Format (V4)
 
 Successful response includes:
-- `data` - Query results, SQL, row count, execution time
+- `data.query` - SQL text, generation metadata, validation details
+- `data.result` - Query results, row count, execution time
+- `data.context` - Request/workspace/user context
 - `pagination` - Limit, offset, total, hasMore
-- `meta` - Request ID, workspace, user role, optimization URLs
+- `links` - Explain and optimization endpoints
+- `meta` - Runtime metadata including auto-repair usage
 
 ### Error Codes
 
@@ -175,13 +189,15 @@ Successful response includes:
 - `QUERY_NOT_FOUND` (404)
 - `REQUEST_FAILED` (500)
 
-## Configuration - V3
+## Configuration - V4
 
 Set these in `.env`:
 
 ```env
 # Database
 DATABASE_URL=postgresql://user:password@host/db
+DATABASE_URL_READONLY=postgresql://readonly:password@host/db
+DATABASE_URL_WRITER=postgresql://writer:password@host/db
 
 # Server
 PORT=3000
@@ -209,6 +225,14 @@ ALLOWED_TABLES=users,products,orders
 BEDROCK_MAX_TOKENS=512
 BEDROCK_TEMPERATURE=0.1
 ENABLE_AUTO_REPAIR=true
+BEDROCK_TIMEOUT_MS=15000
+BEDROCK_MAX_RETRIES=1
+BEDROCK_RETRY_BASE_MS=200
+BEDROCK_RATE_LIMIT_WINDOW_MS=1000
+BEDROCK_RATE_LIMIT_MAX=5
+
+# LLM Adapter
+LLM_PROVIDER=bedrock
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
@@ -249,12 +273,12 @@ npm test
 
 Build:
 ```bash
-docker build -t text-to-sql-api:v3 .
+docker build -t text-to-sql-api:v4 .
 ```
 
 Run:
 ```bash
-docker run -e NODE_ENV=production --env-file .env -p 3000:3000 text-to-sql-api:v3
+docker run -e NODE_ENV=production --env-file .env -p 3000:3000 text-to-sql-api:v4
 ```
 
 ### Production Database Setup
